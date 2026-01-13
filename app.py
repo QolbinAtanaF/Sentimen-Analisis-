@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import re
 import nltk
 from nltk.corpus import stopwords
-from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
 import os
 import pickle
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -180,3 +179,4 @@ if uploaded_file:
                 file_name="hasil_sentimen.csv",
                 mime="text/csv"
             )
+
