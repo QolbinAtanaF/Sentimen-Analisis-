@@ -4,28 +4,34 @@ import matplotlib.pyplot as plt
 import re
 import nltk
 from nltk.corpus import stopwords
+from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
+import os
+import pickle
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.svm import SVC
 
 # =========================
-# KONFIGURASI DASHBOARD
+# DASHBOARD
 # =========================
-st.set_page_config(
-    page_title="Sentimen Analisis YouTube",
-    layout="wide"
-)
-
-st.title("📊 Dashboard Sentimen Analisis Komentar YouTube")
+st.set_page_config(page_title="Sentimen Analisis YouTube", layout="wide")
+st.title("📊 Dashboard Sentimen Analisis Komentar YouTube (ML Auto)")
 st.markdown("""
-**Metode:**  
-Auto Sentiment Labeling berbasis kamus kata (Lexicon-Based)
+**Metode:** Lexicon-Based + TF-IDF + SVM (otomatis training jika model belum ada)  
+**Preprocessing:** Case Folding, Cleaning, Tokenizing & Stopword Removal, Stemming
 """)
-
 st.divider()
 
 # =========================
-# NLTK STOPWORDS
+# DOWNLOAD STOPWORDS
 # =========================
 nltk.download("stopwords")
 stop_words = stopwords.words("indonesian")
+
+# =========================
+# STEMMER (SASTRAWI)
+# =========================
+factory = StemmerFactory()
+stemmer = factory.create_stemmer()
 
 # =========================
 # LOAD KAMUS POSITIF & NEGATIF
@@ -38,17 +44,22 @@ positive_words = load_lexicon("kamus_positif.txt")
 negative_words = load_lexicon("kamus_negatif.txt")
 
 # =========================
-# PREPROCESSING
+# PREPROCESSING LENGKAP
 # =========================
 def clean_text(text):
+    # 1. Case Folding
     text = str(text).lower()
+    # 2. Cleaning: hapus link, angka, tanda baca, emoji
     text = re.sub(r"http\S+", "", text)
     text = re.sub(r"[^a-z\s]", "", text)
-    text = " ".join([w for w in text.split() if w not in stop_words])
-    return text
+    # 3. Tokenizing & Stopword Removal
+    tokens = [w for w in text.split() if w not in stop_words]
+    # 4. Stemming
+    tokens = [stemmer.stem(w) for w in tokens]
+    return " ".join(tokens)
 
 # =========================
-# AUTO SENTIMENT LABELING
+# AUTO LABELING (LEXICON)
 # =========================
 def auto_label(text):
     score = 0
@@ -57,7 +68,6 @@ def auto_label(text):
             score += 1
         elif word in negative_words:
             score -= 1
-
     if score > 0:
         return "positif"
     elif score < 0:
@@ -66,13 +76,42 @@ def auto_label(text):
         return "netral"
 
 # =========================
-# DASHBOARD UPLOAD FILE
+# FILE MODEL
+# =========================
+MODEL_FILE = "svm_model.pkl"
+VECT_FILE = "tfidf.pkl"
+
+# =========================
+# TRAIN MODEL (TF-IDF + SVM)
+# =========================
+def train_model(df):
+    # Preprocessing teks
+    df["clean_text"] = df["textDisplay"].apply(clean_text)
+    # Auto-label lexicon untuk training
+    df["sentiment"] = df["clean_text"].apply(auto_label)
+
+    # TF-IDF
+    tfidf = TfidfVectorizer()
+    X = tfidf.fit_transform(df["clean_text"])
+    y = df["sentiment"]
+
+    # SVM training
+    svm_model = SVC(kernel="linear", probability=True)
+    svm_model.fit(X, y)
+
+    # Simpan model
+    with open(VECT_FILE, "wb") as f:
+        pickle.dump(tfidf, f)
+    with open(MODEL_FILE, "wb") as f:
+        pickle.dump(svm_model, f)
+
+    return tfidf, svm_model
+
+# =========================
+# UPLOAD CSV
 # =========================
 st.subheader("📂 Upload File CSV Komentar YouTube")
-uploaded_file = st.file_uploader(
-    "Pilih file CSV dari komputer",
-    type=["csv"]
-)
+uploaded_file = st.file_uploader("Pilih file CSV dari komputer", type=["csv"])
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
@@ -85,8 +124,21 @@ if uploaded_file:
 
         if st.button("🔍 Analisis Sentimen"):
             with st.spinner("Menganalisis komentar..."):
+                # TRAIN MODEL JIKA BELUM ADA
+                if not os.path.exists(MODEL_FILE) or not os.path.exists(VECT_FILE):
+                    st.info("Model belum ada, melakukan training otomatis dari lexicon...")
+                    tfidf, svm_model = train_model(df)
+                    st.success("✅ Model berhasil dibuat dan disimpan")
+                else:
+                    with open(VECT_FILE, "rb") as f:
+                        tfidf = pickle.load(f)
+                    with open(MODEL_FILE, "rb") as f:
+                        svm_model = pickle.load(f)
+
+                # PREDIKSI
                 df["clean_text"] = df["textDisplay"].apply(clean_text)
-                df["sentiment"] = df["clean_text"].apply(auto_label)
+                X_new = tfidf.transform(df["clean_text"])
+                df["sentiment"] = svm_model.predict(X_new)
 
             st.success("🎉 Analisis selesai")
 
@@ -118,3 +170,13 @@ if uploaded_file:
             c1.metric("Positif (%)", sent_ratio.get("positif", 0))
             c2.metric("Negatif (%)", sent_ratio.get("negatif", 0))
             c3.metric("Netral (%)", sent_ratio.get("netral", 0))
+
+            # =========================
+            # DOWNLOAD HASIL CSV
+            # =========================
+            st.download_button(
+                label="⬇ Download Hasil CSV",
+                data=df.to_csv(index=False),
+                file_name="hasil_sentimen.csv",
+                mime="text/csv"
+            )
