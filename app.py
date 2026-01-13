@@ -17,7 +17,7 @@ nltk.download("stopwords")
 stop_words = stopwords.words("indonesian")
 
 st.set_page_config(page_title="Sentimen Analisis YouTube", layout="wide")
-st.title("📊 Dashboard Sentimen Analisis Komentar YouTube (ML Auto)")
+st.title(" Dashboard Sentimen Analisis Komentar YouTube (ML Auto)")
 st.markdown("""
 **Metode:** Lexicon-Based + TF-IDF + SVM  
 **Preprocessing:** Case Folding, Cleaning, Stopword Removal
@@ -91,19 +91,19 @@ def train_model(df):
 # =========================
 # UPLOAD CSV
 # =========================
-st.subheader("📂 Upload File CSV Komentar YouTube")
+st.subheader(" Upload File CSV Komentar YouTube")
 uploaded_file = st.file_uploader("Pilih file CSV", type=["csv"])
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
 
     if "textDisplay" not in df.columns:
-        st.error("❌ Kolom 'textDisplay' tidak ditemukan")
+        st.error(" Kolom 'textDisplay' tidak ditemukan")
         st.stop()
 
-    st.success(f"✅ File berhasil dibaca ({len(df)} komentar)")
+    st.success(f" File berhasil dibaca ({len(df)} komentar)")
 
-    if st.button("🔍 Analisis Sentimen"):
+    if st.button(" Analisis Sentimen"):
         with st.spinner("Menganalisis komentar..."):
             if not os.path.exists(MODEL_FILE):
                 tfidf, svm_model = train_model(df)
@@ -117,12 +117,12 @@ if uploaded_file:
             X_new = tfidf.transform(df["clean_text"])
             df["sentiment"] = svm_model.predict(X_new)
 
-        st.success("🎉 Analisis selesai")
+        st.success(" Analisis selesai")
 
-        st.subheader("📋 Hasil Analisis")
+        st.subheader(" Hasil Analisis")
         st.dataframe(df[["authorDisplayName", "textDisplay", "sentiment"]])
 
-        st.subheader("🥧 Distribusi Sentimen (%)")
+        st.subheader(" Distribusi Sentimen (%)")
         sent_ratio = df["sentiment"].value_counts(normalize=True) * 100
 
         fig, ax = plt.subplots()
@@ -136,3 +136,4 @@ if uploaded_file:
             "hasil_sentimen.csv",
             "text/csv"
         )
+
